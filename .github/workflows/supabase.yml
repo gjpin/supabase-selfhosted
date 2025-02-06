@@ -64,6 +64,7 @@ jobs:
         id: create_instance
         run: |
           INSTANCE_NAME="${{ github.event.inputs.instance_name }}"
+          USER_DATA_FILE="cloudinit/supabase.yml"
 
           # Error out of if instance with same name already exists
           if openstack server list -f value -c Name | grep -qw "$INSTANCE_NAME"; then
@@ -77,6 +78,7 @@ jobs:
             --flavor "${{ github.event.inputs.instance_flavor }}" \
             --key-name my_key \
             --network ext-net1 \
+            --user-data "$USER_DATA_FILE" \
             "$INSTANCE_NAME"
 
       - name: Supabase Network Security Group
@@ -88,7 +90,7 @@ jobs:
           openstack security group create "$INSTANCE_NAME"
 
           # Allow SSH
-          openstack security group rule create --ingress --protocol tcp --dst-port 22 --ethertype IPv4 "$INSTANCE_NAME"
+          openstack security group rule create --ingress --protocol tcp --dst-port 2220 --ethertype IPv4 "$INSTANCE_NAME"
 
           # Allow HTTP (due to HTTP-01 challenge) and HTTPS
           openstack security group rule create --ingress --protocol tcp --dst-port 80 --ethertype IPv4 "$INSTANCE_NAME"

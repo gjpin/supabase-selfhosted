@@ -1,0 +1,68 @@
+#cloud-config
+
+write_files:
+  - path: /etc/ssh/sshd_config
+    permissions: '0600'
+    owner: root:root
+    content: |
+      Port 2220
+      PermitEmptyPasswords no
+      PermitUserEnvironment no
+      Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256
+      ClientAliveInterval 300
+      ClientAliveCountMax 0
+      LoginGraceTime 30
+      AllowUsers *
+      AllowGroups *
+      DenyUsers nobody
+      DenyGroups nobody
+      Banner none
+      UsePAM yes
+      AllowTCPForwarding no
+      maxstartups 10:30:60
+      maxsessions 10
+      Protocol 2
+      LogLevel INFO
+      X11Forwarding no
+      MaxAuthTries 4
+      IgnoreRhosts yes
+      HostbasedAuthentication no
+      PubkeyAuthentication yes
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      KerberosAuthentication no
+      ChallengeResponseAuthentication no
+      HostbasedAuthentication no
+      GSSAPIAuthentication no
+      GSSAPIKeyExchange no
+      RekeyLimit 512M 6h
+      AllowAgentForwarding no
+      AllowStreamLocalForwarding no
+      PermitTunnel no
+      PermitUserRC no
+      GatewayPorts no
+      StrictModes yes
+      AcceptEnv LANG LC_*
+      PermitRootLogin prohibit-password
+      PrintMotd no
+      PermitOpen any
+
+runcmd:
+  - sudo apt update
+  - sudo apt full-upgrade -y
+  - systemctl restart sshd.service
+  - sudo apt install -y ca-certificates curl
+  - sudo install -m 0755 -d /etc/apt/keyrings
+  - sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - sudo chmod a+r /etc/apt/keyrings/docker.asc
+  - |
+    echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - sudo apt update
+  - sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - sudo groupadd docker
+  - sudo usermod -aG docker ubuntu
