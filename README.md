@@ -1,5 +1,4 @@
 # Self-hosted Supabase
-Original reference: https://supabase.com/docs/guides/self-hosting/docker
 
 # How to
 1. Create [Infomaniak account](https://www.infomaniak.com/en) or other Openstack provider
@@ -18,7 +17,9 @@ Original reference: https://supabase.com/docs/guides/self-hosting/docker
    * PUBLIC_SSH_KEY (cat ~/.ssh/id_ecdsa.pub)
 
 # Other references
-## Kong Letsencrypt
+## Supabaser
+* https://supabase.com/docs/guides/self-hosting/docker
+## Kong LetEencrypt
 * https://github.com/Kong/go-database-reconciler/blob/main/pkg/file/kong_json_schema.json
 * https://github.com/Kong/kong/blob/master/spec/03-plugins/29-acme/04-schema_spec.lua
 * https://docs.konghq.com/hub/kong-inc/acme/how-to/redis/
