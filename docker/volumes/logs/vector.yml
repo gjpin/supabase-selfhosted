@@ -93,6 +93,7 @@ transforms:
           .metadata = merge!(.metadata, parsed)
       }
   # PostgREST logs are structured so we separate timestamp from message using regex
+  # https://github.com/supabase/supabase/pull/28931
   rest_logs:
     type: remap
     inputs:
@@ -101,7 +102,7 @@ transforms:
       parsed, err = parse_regex(.event_message, r'^(?P<time>.*): (?P<msg>.*)$')
       if err == null {
           .event_message = parsed.msg
-          .timestamp = to_timestamp!(parsed.time)
+          .timestamp = parse_timestamp!(parsed.time, format: "%v %R %:z")
           .metadata.host = .project
       }
   # Realtime logs are structured so we parse the severity level using regex (ignore time because it has no date)
