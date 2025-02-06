@@ -1,0 +1,95 @@
+name: Create Supabase server
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_name:
+        type: string
+        description: "Instance name"
+        required: true
+        default: "supabase"
+      instance_flavor:
+        type: string
+        description: "Instance flavor (openstack flavor list)"
+        required: true
+        default: "a2-ram4-disk20-perf1"
+      os_image:
+        type: string
+        description: "OS image (openstack image list)"
+        required: true
+        default: "Ubuntu 24.04 LTS Noble Numbat"
+      datacenter:
+        type: choice
+        description: "Datacenter to deploy on"
+        required: true
+        default: "dc3-a"
+        options:
+          - dc3-a
+          - dc4-a
+
+jobs:
+  create-server:
+    runs-on: ubuntu-latest
+
+    env:
+      OS_PASSWORD: ${{ secrets.OS_PASSWORD }}
+      OS_PROJECT_ID: ${{ secrets.OS_PROJECT_ID }}
+      OS_PROJECT_NAME: ${{ secrets.OS_PROJECT_NAME }}
+      OS_USERNAME: ${{ secrets.OS_USERNAME }}
+      OS_AUTH_URL: ${{ vars.OS_AUTH_URL }}
+      OS_PROJECT_DOMAIN_NAME: ${{ vars.OS_PROJECT_DOMAIN_NAME }}
+      OS_USER_DOMAIN_NAME: ${{ vars.OS_USER_DOMAIN_NAME }}
+      OS_IDENTITY_API_VERSION: ${{ vars.OS_IDENTITY_API_VERSION }}
+      OS_INTERFACE: ${{ vars.OS_INTERFACE }}
+      OS_REGION_NAME: ${{ github.event.inputs.datacenter }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenStack CLI
+        run: "sudo apt install -y python3-openstackclient"
+
+      - name: Add public SSH key to Openstack
+        id: add_public_ssh_key_to_openstack
+        run: |
+          KEY_NAME="my_key"
+          if openstack keypair list -f value -c Name | grep -qw "$KEY_NAME"; then
+              echo "Key '$KEY_NAME' already exists, skipping creation."
+          else
+              openstack keypair create --public-key "${{ secrets.PUBLIC_SSH_KEY }}" "$KEY_NAME"
+              echo "Key '$KEY_NAME' created."
+          fi
+
+      - name: Create instance
+        id: create_instance
+        run: |
+          INSTANCE_NAME="${{ github.event.inputs.instance_name }}"
+
+          # Error out of if instance with same name already exists
+          if openstack server list -f value -c Name | grep -qw "$INSTANCE_NAME"; then
+            echo "Error: Server '$INSTANCE_NAME' already exists."
+            exit 1
+          fi
+
+          # Otherwise, create the server
+          openstack server create \
+            --image "${{ github.event.inputs.os_image }}" \
+            --flavor "${{ github.event.inputs.instance_flavor }}" \
+            --key-name my_key \
+            --network ext-net1 \
+            "$INSTANCE_NAME"
+
+      - name: Supabase Network Security Group
+        id: supabase_nsg
+        run: |
+          INSTANCE_NAME="${{ github.event.inputs.instance_name }}"
+
+          # Create security group
+          openstack security group create "$INSTANCE_NAME"
+
+          # Allow SSH
+          openstack security group rule create --ingress --protocol tcp --dst-port 22 --ethertype IPv4 "$INSTANCE_NAME"
+
+          # Allow HTTP (due to HTTP-01 challenge) and HTTPS
+          openstack security group rule create --ingress --protocol tcp --dst-port 80 --ethertype IPv4 "$INSTANCE_NAME"
+          openstack security group rule create --ingress --protocol tcp --dst-port 443 --ethertype IPv4 "$INSTANCE_NAME"
