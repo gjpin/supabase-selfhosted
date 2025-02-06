@@ -93,3 +93,6 @@ jobs:
           # Allow HTTP (due to HTTP-01 challenge) and HTTPS
           openstack security group rule create --ingress --protocol tcp --dst-port 80 --ethertype IPv4 "$INSTANCE_NAME"
           openstack security group rule create --ingress --protocol tcp --dst-port 443 --ethertype IPv4 "$INSTANCE_NAME"
+
+          # Attach security group to instance
+          openstack server add security group "$INSTANCE_NAME" "$INSTANCE_NAME"
