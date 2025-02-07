@@ -96,5 +96,11 @@ jobs:
           openstack security group rule create --ingress --protocol tcp --dst-port 80 --ethertype IPv4 "$INSTANCE_NAME"
           openstack security group rule create --ingress --protocol tcp --dst-port 443 --ethertype IPv4 "$INSTANCE_NAME"
 
+          # Allow Supavisor (session based connections)
+          openstack security group rule create --ingress --protocol tcp --dst-port 5432 --ethertype IPv4 "$INSTANCE_NAME"
+
+          # Allow Supavisor (pooled database connections)
+          openstack security group rule create --ingress --protocol tcp --dst-port 6543 --ethertype IPv4 "$INSTANCE_NAME"
+
           # Attach security group to instance
           openstack server add security group "$INSTANCE_NAME" "$INSTANCE_NAME"
