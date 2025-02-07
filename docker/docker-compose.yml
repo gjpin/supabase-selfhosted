@@ -54,8 +54,7 @@ services:
       - ${KONG_HTTP_PORT}:8000/tcp
       - ${KONG_HTTPS_PORT}:8443/tcp
     volumes:
-      # https://github.com/supabase/supabase/issues/12661
-      - ./volumes/api/kong.yml:/home/kong/temp.yml:ro
+      - ./volumes/api/kong.yml:/kong/declarative/kong.yml:ro
     depends_on:
       analytics:
         condition: service_healthy
@@ -73,11 +72,9 @@ services:
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
-      KONG_LUA_SSL_TRUSTED_CERTIFICATE: /etc/ssl/cert.pem
+      KONG_LUA_SSL_TRUSTED_CERTIFICATE: /etc/ssl/certs/ca-certificates.crt
       ACME_EMAIL: ${ACME_EMAIL}
       ACME_DOMAIN: ${ACME_DOMAIN}
-    # https://unix.stackexchange.com/a/294837
-    entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
 
   kongredis:
     container_name: supabase-redis
@@ -396,6 +393,8 @@ services:
       - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
       # Must be superuser to create event trigger
       - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+      # Enable vector (pgvector) extension by default
+      - ./volumes/db/vector.sql:/docker-entrypoint-initdb.d/init-scripts/99-vector.sql:Z
       # Must be superuser to alter reserved role
       - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
       # Initialize the database settings with JWT_SECRET and JWT_EXP
