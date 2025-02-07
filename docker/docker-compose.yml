@@ -54,7 +54,8 @@ services:
       - ${KONG_HTTP_PORT}:8000/tcp
       - ${KONG_HTTPS_PORT}:8443/tcp
     volumes:
-      - ./volumes/api/kong.yml:/tmp/kong.yml:ro
+      - ./volumes/api/kong.yml:/kong/declarative/tmp.yml:ro
+    user: $USER
     depends_on:
       analytics:
         condition: service_healthy
@@ -75,7 +76,7 @@ services:
       KONG_LUA_SSL_TRUSTED_CERTIFICATE: /etc/ssl/certs/ca-certificates.crt
       ACME_EMAIL: ${ACME_EMAIL}
       ACME_DOMAIN: ${ACME_DOMAIN}
-    entrypoint: bash -c 'eval "echo \"$$(cat /tmp/kong.yml)\"" > /kong/declarative/kong.yml && /docker-entrypoint.sh kong docker-start'
+    entrypoint: bash -c 'eval "echo \"$$(cat /kong/declarative/tmp.yml)\"" > /kong/declarative/kong.yml && /docker-entrypoint.sh kong docker-start'
 
   kongredis:
     container_name: supabase-redis

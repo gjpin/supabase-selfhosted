@@ -17,10 +17,12 @@
    * PUBLIC_SSH_KEY (cat ~/.ssh/id_ecdsa.pub)
 
 # Other references
-## Supabaser
+## Supabase
 * https://supabase.com/docs/guides/self-hosting/docker
 ## Kong
 * https://docs.konghq.com/gateway/latest/install/docker/#start-kong-gateway-in-db-less-mode
+* https://github.com/Kong/docker-kong/tree/master/ubuntu
+* https://docs.konghq.com/gateway/latest/production/deployment-topologies/db-less-and-declarative-config/
 ## Kong LetEencrypt
 * https://github.com/Kong/go-database-reconciler/blob/main/pkg/file/kong_json_schema.json
 * https://github.com/Kong/kong/blob/master/spec/03-plugins/29-acme/04-schema_spec.lua
