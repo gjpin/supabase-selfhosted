@@ -46,6 +46,40 @@ services:
       NEXT_PUBLIC_ENABLE_LOGS: true
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
 
+  certbot:
+    container_name: certbot
+    image: certbot/dns-cloudflare:latest:v4.0.0
+    depends_on:
+      - supabase-kong
+    volumes:
+      - ./volumes/acme/certs:/etc/letsencrypt
+      - ./volumes/acme/hooks:/acme-hooks:ro
+      - ./volumes/acme/cloudflare.ini:/cloudflare.ini:ro
+    environment:
+      # Cloudflare API token for DNS-01
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      # Email for Let’s Encrypt registration
+      CERTBOT_EMAIL: ${ACME_EMAIL}
+      DOMAIN: ${ACME_DOMAIN}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        # 1. Obtain or renew the cert via DNS-01
+        certbot certonly \
+          --non-interactive \
+          --agree-tos \
+          --email "$CERTBOT_EMAIL" \
+          --dns-cloudflare \
+          --dns-cloudflare-credentials /cloudflare.ini \
+          --dns-cloudflare-propagation-seconds 60 \
+          -d "$DOMAIN" \
+          -d "*.$DOMAIN" \
+          --preferred-challenges dns-01 \
+          --deploy-hook "/acme-hooks/post_renewal.sh"
+        # 2. Keep container alive (optional, for manual trigger)
+        tail -f /dev/null
+
   kong:
     container_name: supabase-kong
     image: kong:3.9.0
@@ -55,6 +89,8 @@ services:
       - ${KONG_HTTPS_PORT}:8443/tcp
     volumes:
       - ./volumes/api/kong.yml:/kong/declarative/tmp.yml:ro
+      - ./volumes/acme/certs:/etc/letsencrypt
+      - ./volumes/acme/hooks:/acme-hooks:ro
     user: $USER
     depends_on:
       analytics:
