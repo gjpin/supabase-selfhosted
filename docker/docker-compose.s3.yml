@@ -31,7 +31,7 @@ services:
 
   storage:
     container_name: supabase-storage
-    image: supabase/storage-api:v1.18.1
+    image: supabase/storage-api:v1.22.13
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -82,7 +82,7 @@ services:
 
   imgproxy:
     container_name: supabase-imgproxy
-    image: ghcr.io/imgproxy/imgproxy:v3.27.2
+    image: ghcr.io/imgproxy/imgproxy:v3.28.0
     healthcheck:
       test: [ "CMD", "imgproxy", "health" ]
       timeout: 5s

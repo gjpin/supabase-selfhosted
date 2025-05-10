@@ -11,7 +11,7 @@ services:
 
   studio:
     container_name: supabase-studio
-    image: supabase/studio:20250130-b048539
+    image: supabase/studio:2025.05.05-sha-3c3fe9b
     restart: unless-stopped
     healthcheck:
       test:
@@ -19,7 +19,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://studio:3000/api/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
+          "fetch('http://studio:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
         ]
       timeout: 10s
       interval: 5s
@@ -80,7 +80,7 @@ services:
 
   kongredis:
     container_name: supabase-redis
-    image: valkey/valkey:8.0.2
+    image: valkey/valkey:8.1.1
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
@@ -92,7 +92,7 @@ services:
 
   auth:
     container_name: supabase-auth
-    image: supabase/gotrue:v2.169.0
+    image: supabase/gotrue:v2.172.1
     restart: unless-stopped
     healthcheck:
       test:
@@ -199,7 +199,7 @@ services:
   realtime:
     # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
     container_name: realtime-dev.supabase-realtime
-    image: supabase/realtime:v2.34.18
+    image: supabase/realtime:v2.35.0
     restart: unless-stopped
     depends_on:
       db:
@@ -244,7 +244,7 @@ services:
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
   storage:
     container_name: supabase-storage
-    image: supabase/storage-api:v1.18.1
+    image: supabase/storage-api:v1.22.13
     restart: unless-stopped
     volumes:
       - ./volumes/storage:/var/lib/storage:z
@@ -287,7 +287,7 @@ services:
 
   imgproxy:
     container_name: supabase-imgproxy
-    image: ghcr.io/imgproxy/imgproxy:v3.27.2
+    image: ghcr.io/imgproxy/imgproxy:v3.28.0
     restart: unless-stopped
     volumes:
       - ./volumes/storage:/var/lib/storage:z
@@ -309,7 +309,7 @@ services:
 
   meta:
     container_name: supabase-meta
-    image: supabase/postgres-meta:v0.85.4
+    image: supabase/postgres-meta:v0.89.0
     restart: unless-stopped
     depends_on:
       db:
@@ -327,7 +327,7 @@ services:
 
   functions:
     container_name: supabase-edge-functions
-    image: supabase/edge-runtime:v1.67.0
+    image: supabase/edge-runtime:v1.67.4
     restart: unless-stopped
     volumes:
       - ./volumes/functions:/home/deno/functions:Z
@@ -351,7 +351,7 @@ services:
 
   analytics:
     container_name: supabase-analytics
-    image: supabase/logflare:1.10.9
+    image: supabase/logflare:1.14.0
     restart: unless-stopped
     ports:
       - 4000:4000
@@ -389,7 +389,7 @@ services:
   # Comment out everything below this point if you are using an external Postgres database
   db:
     container_name: supabase-db
-    image: supabase/postgres:15.8.1.035
+    image: supabase/postgres:15.8.1.085
     restart: unless-stopped
     volumes:
       - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
@@ -448,11 +448,11 @@ services:
 
   vector:
     container_name: supabase-vector
-    image: timberio/vector:0.44.0-alpine
+    image: timberio/vector:0.46.1-alpine
     restart: unless-stopped
     volumes:
-      - ./volumes/logs/vector.yml:/etc/vector/vector.yml:ro
-      - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro
+      - ./volumes/logs/vector.yml:/etc/vector/vector.yml:ro,z
+      - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro,z
     healthcheck:
       test:
         [
@@ -473,17 +473,19 @@ services:
         "--config",
         "/etc/vector/vector.yml"
       ]
+    security_opt:
+      - "label=disable"
 
   # Update the DATABASE_URL if you are using an external Postgres database
   supavisor:
     container_name: supabase-pooler
-    image: supabase/supavisor:2.3.2
+    image: supabase/supavisor:2.5.1
     restart: unless-stopped
     ports:
       - ${POSTGRES_PORT}:5432
       - ${POOLER_PROXY_PORT_TRANSACTION}:6543
     volumes:
-      - ./volumes/pooler/pooler.exs:/etc/pooler/pooler.exs:ro
+      - ./volumes/pooler/pooler.exs:/etc/pooler/pooler.exs:ro,z
     healthcheck:
       test:
         [
