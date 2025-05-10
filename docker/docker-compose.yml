@@ -9,6 +9,7 @@ name: supabase
 
 services:
 
+  # studio
   studio:
     container_name: supabase-studio
     image: supabase/studio:2025.05.05-sha-3c3fe9b
@@ -27,6 +28,8 @@ services:
     depends_on:
       analytics:
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -46,40 +49,7 @@ services:
       NEXT_PUBLIC_ENABLE_LOGS: true
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
 
-  certbot:
-    container_name: certbot
-    image: certbot/dns-cloudflare:latest:v4.0.0
-    depends_on:
-      - supabase-kong
-    volumes:
-      - ./volumes/acme/certs:/etc/letsencrypt
-      - ./volumes/acme/hooks:/acme-hooks:ro
-      - ./volumes/acme/cloudflare.ini:/cloudflare.ini:ro
-    environment:
-      # Cloudflare API token for DNS-01
-      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
-      # Email for Let’s Encrypt registration
-      CERTBOT_EMAIL: ${ACME_EMAIL}
-      DOMAIN: ${ACME_DOMAIN}
-    entrypoint:
-      - sh
-      - -c
-      - |
-        # 1. Obtain or renew the cert via DNS-01
-        certbot certonly \
-          --non-interactive \
-          --agree-tos \
-          --email "$CERTBOT_EMAIL" \
-          --dns-cloudflare \
-          --dns-cloudflare-credentials /cloudflare.ini \
-          --dns-cloudflare-propagation-seconds 60 \
-          -d "$DOMAIN" \
-          -d "*.$DOMAIN" \
-          --preferred-challenges dns-01 \
-          --deploy-hook "/acme-hooks/post_renewal.sh"
-        # 2. Keep container alive (optional, for manual trigger)
-        tail -f /dev/null
-
+  # kong
   kong:
     container_name: supabase-kong
     image: kong:3.9.0
@@ -89,20 +59,20 @@ services:
       - ${KONG_HTTPS_PORT}:8443/tcp
     volumes:
       - ./volumes/api/kong.yml:/kong/declarative/tmp.yml:ro
-      - ./volumes/acme/certs:/etc/letsencrypt
-      - ./volumes/acme/hooks:/acme-hooks:ro
     user: $USER
     depends_on:
       analytics:
         condition: service_healthy
       kongredis:
         condition: service_started
+    networks:
+      - supabase
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
       # https://github.com/supabase/cli/issues/14
       KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,acme
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
       SUPABASE_ANON_KEY: ${ANON_KEY}
@@ -110,22 +80,52 @@ services:
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
       KONG_LUA_SSL_TRUSTED_CERTIFICATE: /etc/ssl/certs/ca-certificates.crt
-      ACME_EMAIL: ${ACME_EMAIL}
-      ACME_DOMAIN: ${ACME_DOMAIN}
     entrypoint: bash -c 'eval "echo \"$$(cat /kong/declarative/tmp.yml)\"" > /kong/declarative/kong.yml && /docker-entrypoint.sh kong docker-start'
 
-  kongredis:
-    container_name: supabase-redis
-    image: valkey/valkey:8.1.1
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 5s
-      timeout: 5s
-      retries: 3
+  # certbot
+  certbot:
+    container_name: supabase-certbot
+    image: certbot/dns-cloudflare:latest:v4.0.0
+    depends_on:
+      - supabase-kong
     volumes:
-      - ./volumes/redis/data:/data
+      - ./volumes/scripts:/scripts:ro
+    networks:
+      - supabase
+    environment:
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      ACME_DOMAIN: ${ACME_DOMAIN}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        # 0. Write credentials to a temp file
+        echo "dns_cloudflare_api_token = $CLOUDFLARE_API_TOKEN" > /tmp/cloudflare.ini
+        chmod 600 /tmp/cloudflare.ini
 
+        # 1. Obtain or renew the cert via DNS-01
+        certbot certonly \
+          --non-interactive \
+          --agree-tos \
+          --email "$ACME_EMAIL" \
+          --dns-cloudflare \
+          --dns-cloudflare-credentials /tmp/cloudflare.ini \
+          --dns-cloudflare-propagation-seconds 60 \
+          -d "$ACME_DOMAIN" \
+          -d "*.$ACME_DOMAIN" \
+          --preferred-challenges dns-01 \
+          --deploy-hook "/scripts/certbot_post_renewal.sh"
+
+        # 2. Auto-renew loop (every 12 hours)
+        echo "Starting Certbot renewal loop"
+        while true; do
+          certbot renew --deploy-hook "/acme-hooks/post_renewal.sh"
+          echo "Sleeping for 12h before next renewal check..."
+          sleep 12h
+        done
+
+  # auth
   auth:
     container_name: supabase-auth
     image: supabase/gotrue:v2.172.1
@@ -149,6 +149,8 @@ services:
         condition: service_healthy
       analytics:
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
@@ -171,11 +173,6 @@ services:
       GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS}
       GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM}
 
-      # Uncomment to bypass nonce check in ID Token flow. Commonly set to true when using Google Sign In on mobile.
-      # GOTRUE_EXTERNAL_SKIP_NONCE_CHECK: true
-
-      # GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: true
-      # GOTRUE_SMTP_MAX_FREQUENCY: 1s
       GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
       GOTRUE_SMTP_HOST: ${SMTP_HOST}
       GOTRUE_SMTP_PORT: ${SMTP_PORT}
@@ -189,26 +186,8 @@ services:
 
       GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
       GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
-      # Uncomment to enable custom access token hook. Please see: https://supabase.com/docs/guides/auth/auth-hooks for full list of hooks and additional details about custom_access_token_hook
 
-      # GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED: "true"
-      # GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI: "pg-functions://postgres/public/custom_access_token_hook"
-      # GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_SECRETS: "<standard-base64-secret>"
-
-      # GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_ENABLED: "true"
-      # GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_URI: "pg-functions://postgres/public/mfa_verification_attempt"
-
-      # GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_ENABLED: "true"
-      # GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_URI: "pg-functions://postgres/public/password_verification_attempt"
-
-      # GOTRUE_HOOK_SEND_SMS_ENABLED: "false"
-      # GOTRUE_HOOK_SEND_SMS_URI: "pg-functions://postgres/public/custom_access_token_hook"
-      # GOTRUE_HOOK_SEND_SMS_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
-
-      # GOTRUE_HOOK_SEND_EMAIL_ENABLED: "false"
-      # GOTRUE_HOOK_SEND_EMAIL_URI: "http://host.docker.internal:54321/functions/v1/email_sender"
-      # GOTRUE_HOOK_SEND_EMAIL_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
-
+  # rest
   rest:
     container_name: supabase-rest
     image: postgrest/postgrest:v12.2.7
@@ -219,6 +198,8 @@ services:
         condition: service_healthy
       analytics:
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
@@ -232,6 +213,7 @@ services:
         "postgrest"
       ]
 
+  # realtime
   realtime:
     # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
     container_name: realtime-dev.supabase-realtime
@@ -259,6 +241,8 @@ services:
       timeout: 5s
       interval: 5s
       retries: 3
+    networks:
+      - supabase
     environment:
       PORT: 4000
       DB_HOST: ${POSTGRES_HOST}
@@ -277,6 +261,7 @@ services:
       SEED_SELF_HOST: true
       RUN_JANITOR: true
 
+  # storage
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
   storage:
     container_name: supabase-storage
@@ -305,6 +290,8 @@ services:
         condition: service_started
       imgproxy:
         condition: service_started
+    networks:
+      - supabase
     environment:
       ANON_KEY: ${ANON_KEY}
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
@@ -321,6 +308,7 @@ services:
       ENABLE_IMAGE_TRANSFORMATION: "true"
       IMGPROXY_URL: http://imgproxy:5001
 
+  # imgproxy
   imgproxy:
     container_name: supabase-imgproxy
     image: ghcr.io/imgproxy/imgproxy:v3.28.0
@@ -337,12 +325,15 @@ services:
       timeout: 5s
       interval: 5s
       retries: 3
+    networks:
+      - supabase
     environment:
       IMGPROXY_BIND: ":5001"
       IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
       IMGPROXY_USE_ETAG: "true"
       IMGPROXY_ENABLE_WEBP_DETECTION: ${IMGPROXY_ENABLE_WEBP_DETECTION}
 
+  # meta
   meta:
     container_name: supabase-meta
     image: supabase/postgres-meta:v0.89.0
@@ -353,6 +344,8 @@ services:
         condition: service_healthy
       analytics:
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       PG_META_PORT: 8080
       PG_META_DB_HOST: ${POSTGRES_HOST}
@@ -361,6 +354,7 @@ services:
       PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
 
+  # functions
   functions:
     container_name: supabase-edge-functions
     image: supabase/edge-runtime:v1.67.4
@@ -370,6 +364,8 @@ services:
     depends_on:
       analytics:
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       JWT_SECRET: ${JWT_SECRET}
       SUPABASE_URL: http://kong:8000
@@ -385,6 +381,7 @@ services:
         "/home/deno/functions/main"
       ]
 
+  # analytics
   analytics:
     container_name: supabase-analytics
     image: supabase/logflare:1.14.0
@@ -405,6 +402,8 @@ services:
       db:
         # Disable this if you are using an external Postgres database
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       LOGFLARE_NODE_HOST: 127.0.0.1
       DB_USERNAME: supabase_admin
@@ -422,6 +421,7 @@ services:
       POSTGRES_BACKEND_SCHEMA: _analytics
       LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true
 
+  # db - postgres
   # Comment out everything below this point if you are using an external Postgres database
   db:
     container_name: supabase-db
@@ -463,6 +463,8 @@ services:
     depends_on:
       vector:
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       POSTGRES_HOST: /var/run/postgresql
       PGPORT: ${POSTGRES_PORT}
@@ -482,6 +484,7 @@ services:
         "log_min_messages=fatal" # prevents Realtime polling queries from appearing in logs
       ]
 
+  # vector
   vector:
     container_name: supabase-vector
     image: timberio/vector:0.46.1-alpine
@@ -502,6 +505,8 @@ services:
       timeout: 5s
       interval: 5s
       retries: 3
+    networks:
+      - supabase
     environment:
       LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
     command:
@@ -512,6 +517,7 @@ services:
     security_opt:
       - "label=disable"
 
+  # supavisor
   # Update the DATABASE_URL if you are using an external Postgres database
   supavisor:
     container_name: supabase-pooler
@@ -541,6 +547,8 @@ services:
         condition: service_healthy
       analytics:
         condition: service_healthy
+    networks:
+      - supabase
     environment:
       PORT: 4000
       POSTGRES_PORT: ${POSTGRES_PORT}
@@ -567,3 +575,6 @@ services:
 
 volumes:
   db-config:
+
+networks:
+  supabase:

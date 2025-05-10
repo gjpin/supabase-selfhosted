@@ -1,23 +1,6 @@
 _format_version: '3.0'
 _transform: true
 
-###
-### ACME - Let's Encrypt
-###
-
-plugins:
-- name: acme
-  config:
-    account_email: $ACME_EMAIL
-    api_uri: https://acme-v02.api.letsencrypt.org/directory
-    tos_accepted: true
-    domains:
-      - $ACME_DOMAIN
-    storage: redis
-    storage_config:
-      redis:
-        host: kongredis
-        port: 6379
 
 ###
 ### Consumers / Users

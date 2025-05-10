@@ -45,7 +45,9 @@
 - ACME_EMAIL
    - Your email. eg. example@example.com
 - ACME_DOMAIN
-   - Your domain. eg. https://supabase.example.com
+   - Your domain. eg. supabase.example.com
+- CLOUDFLARE_API_TOKEN
+   - Cloudflare's API token (use 'Edit zone DNS' template and choose your base domain)
 
 # Supabase URLs
 - Auth providers: https://supabase.example.com/project/default/auth/providers
