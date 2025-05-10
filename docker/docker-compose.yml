@@ -62,8 +62,6 @@ services:
     depends_on:
       analytics:
         condition: service_healthy
-      kongredis:
-        condition: service_started
     networks:
       - supabase
     environment:
