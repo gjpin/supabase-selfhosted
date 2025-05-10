@@ -82,7 +82,7 @@ services:
   # certbot
   certbot:
     container_name: supabase-certbot
-    image: certbot/dns-cloudflare:latest:v4.0.0
+    image: certbot/dns-cloudflare:v4.0.0
     depends_on:
       - kong
     volumes:
