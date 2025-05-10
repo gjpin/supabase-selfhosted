@@ -58,7 +58,6 @@ services:
       - ${KONG_HTTPS_PORT}:8443/tcp
     volumes:
       - ./volumes/api/kong.yml:/kong/declarative/tmp.yml:ro
-    user: $USER
     depends_on:
       analytics:
         condition: service_healthy
